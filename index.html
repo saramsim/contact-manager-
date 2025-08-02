@@ -341,10 +341,8 @@
         let extractedContacts = [];
         let selectedOS = '';
 
-        // Dosya yükleme
         document.getElementById('fileInput').addEventListener('change', handleFileUpload);
         
-        // OS seçimi
         document.querySelectorAll('.os-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 document.querySelectorAll('.os-btn').forEach(b => b.classList.remove('active'));
@@ -354,7 +352,6 @@
             });
         });
 
-        // Dışa aktarma
         document.getElementById('exportBtn').addEventListener('click', exportContacts);
 
         async function handleFileUpload(event) {
@@ -362,7 +359,6 @@
             if (files.length === 0) return;
 
             showLoading(true);
-            showStatus('', '');
             extractedContacts = [];
 
             const fileList = document.getElementById('fileList');
@@ -372,18 +368,12 @@
             try {
                 for (const file of files) {
                     const contacts = await processFile(file);
-                    contacts.forEach(contact => {
-                        contact.source = file.name;
-                        extractedContacts.push(contact);
-                    });
+                    extractedContacts.push(...contacts);
                 }
-
-                // Tek seferde duplicate removal
-                removeDuplicates();
 
                 if (extractedContacts.length > 0) {
                     displayContacts();
-                    showStatus('Başarılı!', `${extractedContacts.length} benzersiz kişi bulundu.`, 'success');
+                    showStatus('Başarılı!', `${extractedContacts.length} kişi bulundu.`, 'success');
                 } else {
                     showStatus('Uyarı', 'Dosyalarda hiç kişi bulunamadı.', 'error');
                 }
@@ -401,14 +391,43 @@
 
             try {
                 if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-                    const excelContacts = await processExcelFile(file);
-                    contacts.push(...excelContacts);
+                    const data = await readFileAsArrayBuffer(file);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    workbook.SheetNames.forEach(sheetName => {
+                        const worksheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                        
+                        jsonData.forEach(row => {
+                            if (row && row.length > 0) {
+                                const contact = extractContactFromRow(row, file.name);
+                                if (contact) {
+                                    contacts.push(contact);
+                                }
+                            }
+                        });
+                    });
+
                 } else if (fileName.endsWith('.docx')) {
-                    const wordContacts = await processWordFile(file);
-                    contacts.push(...wordContacts);
+                    const data = await readFileAsArrayBuffer(file);
+                    const result = await mammoth.extractRawText({ arrayBuffer: data });
+                    const textContacts = extractContactsFromText(result.value, file.name);
+                    contacts.push(...textContacts);
+
                 } else if (fileName.endsWith('.pdf')) {
-                    const pdfContacts = await processPDFFile(file);
-                    contacts.push(...pdfContacts);
+                    const data = await readFileAsArrayBuffer(file);
+                    const pdf = await pdfjsLib.getDocument(data).promise;
+                    let fullText = '';
+
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + '\n';
+                    }
+
+                    const textContacts = extractContactsFromText(fullText, file.name);
+                    contacts.push(...textContacts);
                 }
             } catch (error) {
                 console.error(`${file.name} işlenirken hata:`, error);
@@ -417,145 +436,119 @@
             return contacts;
         }
 
-        async function processExcelFile(file) {
-            return new Promise((resolve) => {
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const allText = [];
-
-                        workbook.SheetNames.forEach(sheetName => {
-                            const worksheet = workbook.Sheets[sheetName];
-                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                            
-                            jsonData.forEach(row => {
-                                if (row && row.length > 0) {
-                                    const rowText = row.filter(cell => cell).join(' ');
-                                    if (rowText.trim()) {
-                                        allText.push(rowText);
-                                    }
-                                }
-                            });
-                        });
-
-                        const contacts = extractContactsFromText(allText.join('\n'));
-                        resolve(contacts);
-                    } catch (error) {
-                        console.error('Excel okuma hatası:', error);
-                        resolve([]);
-                    }
-                };
+                reader.onload = e => resolve(new Uint8Array(e.target.result));
+                reader.onerror = reject;
                 reader.readAsArrayBuffer(file);
             });
         }
 
-        async function processWordFile(file) {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    mammoth.extractRawText({ arrayBuffer: e.target.result })
-                        .then(result => {
-                            const contacts = extractContactsFromText(result.value);
-                            resolve(contacts);
-                        })
-                        .catch(error => {
-                            console.error('Word okuma hatası:', error);
-                            resolve([]);
-                        });
+        function extractContactFromRow(row, source) {
+            // Satırdaki tüm hücreleri kontrol et
+            let name = '';
+            let phone = '';
+
+            for (let i = 0; i < row.length; i++) {
+                const cell = row[i];
+                if (!cell) continue;
+                
+                const cellStr = cell.toString().trim();
+                if (!cellStr) continue;
+
+                // Telefon numarası kontrolü
+                if (isPhoneNumber(cellStr)) {
+                    phone = cleanPhoneNumber(cellStr);
+                }
+                // İsim kontrolü (telefon değilse)
+                else if (isPersonName(cellStr)) {
+                    name = formatPersonName(cellStr);
+                }
+            }
+
+            // Hem isim hem telefon varsa kişi oluştur
+            if (name && phone) {
+                return {
+                    name: name,
+                    phone: formatPhoneNumber(phone),
+                    source: source
                 };
-                reader.readAsArrayBuffer(file);
-            });
+            }
+
+            return null;
         }
 
-        async function processPDFFile(file) {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = async function(e) {
-                    try {
-                        const typedarray = new Uint8Array(e.target.result);
-                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
-                        let fullText = '';
-
-                        for (let i = 1; i <= pdf.numPages; i++) {
-                            const page = await pdf.getPage(i);
-                            const textContent = await page.getTextContent();
-                            const pageText = textContent.items.map(item => item.str).join(' ');
-                            fullText += pageText + '\n';
-                        }
-
-                        const contacts = extractContactsFromText(fullText);
-                        resolve(contacts);
-                    } catch (error) {
-                        console.error('PDF okuma hatası:', error);
-                        resolve([]);
-                    }
-                };
-                reader.readAsArrayBuffer(file);
-            });
-        }
-
-        function extractContactsFromText(text) {
+        function extractContactsFromText(text, source) {
             const contacts = [];
             const lines = text.split(/[\n\r]+/);
             
             lines.forEach(line => {
                 const cleanLine = line.trim();
-                if (!cleanLine || cleanLine.length < 5) return;
+                if (!cleanLine) return;
 
-                // Basit telefon numarası arama - sadece bir kez
-                const phoneMatch = cleanLine.match(/(\+90\s?)?(\(?0?\d{3}\)?\s?[-.]?\s?\d{3}\s?[-.]?\s?\d{2}\s?[-.]?\s?\d{2}|\(?0?\d{3}\)?\s?[-.]?\s?\d{3}\s?[-.]?\s?\d{4}|05\d{2}\s?\d{3}\s?\d{2}\s?\d{2})/);
-                
-                if (phoneMatch) {
-                    const phone = phoneMatch[0];
-                    const cleanPhone = phone.replace(/\D/g, '');
-                    
-                    if (cleanPhone.length >= 10) {
-                        // Telefon numarasını satırdan çıkar ve isim ara
-                        const lineWithoutPhone = cleanLine.replace(phone, ' ').trim();
-                        
-                        // Basit isim arama
-                        const nameMatch = lineWithoutPhone.match(/\b[A-ZÇĞİÖŞÜa-zçğıöşü]{2,}\s+[A-ZÇĞİÖŞÜa-zçğıöşü]{2,}\b/);
-                        
-                        let name = '';
-                        if (nameMatch) {
-                            name = formatPersonName(nameMatch[0]);
-                        } else {
-                            // Kelime bazlı isim arama
-                            const words = lineWithoutPhone.split(/\s+/).filter(word => 
-                                word.length >= 2 && 
-                                /^[A-ZÇĞİÖŞÜa-zçğıöşü]+$/.test(word) &&
-                                !['VE', 'İLE', 'TEL', 'TELEFON', 'NO'].includes(word.toUpperCase())
-                            );
-                            
-                            if (words.length >= 2) {
-                                name = formatPersonName(words.slice(0, 2).join(' '));
-                            } else {
-                                name = `Bilinmeyen ${cleanPhone.substr(-4)}`;
-                            }
-                        }
-                        
-                        // Sadece bir kez ekle
-                        contacts.push({
-                            name: name,
-                            phone: formatPhoneNumber(cleanPhone)
-                        });
+                // Satırda telefon var mı?
+                const words = cleanLine.split(/\s+/);
+                let name = '';
+                let phone = '';
+
+                words.forEach(word => {
+                    if (isPhoneNumber(word)) {
+                        phone = cleanPhoneNumber(word);
                     }
+                });
+
+                // Telefon varsa isim ara
+                if (phone) {
+                    const lineWithoutPhone = cleanLine.replace(/\+?[\d\s\(\)\-\.]{10,}/g, '').trim();
+                    const nameWords = lineWithoutPhone.split(/\s+/).filter(word => 
+                        word.length >= 2 && 
+                        /^[A-ZÇĞİÖŞÜa-zçğıöşü]+$/.test(word)
+                    );
+
+                    if (nameWords.length >= 2) {
+                        name = formatPersonName(nameWords.slice(0, 2).join(' '));
+                    } else if (nameWords.length === 1) {
+                        name = formatPersonName(nameWords[0]);
+                    } else {
+                        name = `Kişi ${phone.substr(-4)}`;
+                    }
+
+                    contacts.push({
+                        name: name,
+                        phone: formatPhoneNumber(phone),
+                        source: source
+                    });
                 }
             });
 
             return contacts;
         }
 
+        function isPhoneNumber(str) {
+            if (!str) return false;
+            const cleaned = str.toString().replace(/\D/g, '');
+            return cleaned.length >= 10 && cleaned.length <= 13;
+        }
+
+        function isPersonName(str) {
+            if (!str || str.length < 2) return false;
+            const words = str.toString().trim().split(/\s+/);
+            if (words.length < 1) return false;
+            
+            return words.every(word => 
+                /^[A-ZÇĞİÖŞÜa-zçğıöşü]+$/.test(word) && 
+                word.length >= 2
+            );
+        }
+
+        function cleanPhoneNumber(phone) {
+            return phone.toString().replace(/\D/g, '');
+        }
+
         function formatPersonName(name) {
             return name.split(' ')
-                .map(word => {
-                    if (word.length === 0) return '';
-                    return word.charAt(0).toLocaleUpperCase('tr-TR') + 
-                           word.slice(1).toLocaleLowerCase('tr-TR');
-                })
-                .filter(word => word.length > 0)
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
                 .join(' ');
         }
 
@@ -565,7 +558,6 @@
             if (cleaned.startsWith('90')) {
                 cleaned = cleaned.substring(2);
             }
-            
             if (cleaned.startsWith('0')) {
                 cleaned = cleaned.substring(1);
             }
@@ -577,15 +569,13 @@
             return phone;
         }
 
-        function removeDuplicates() {
+        function displayContacts() {
+            // Duplicate removal
             const unique = [];
             const seen = new Set();
             
             extractedContacts.forEach(contact => {
-                const normalizedPhone = contact.phone.replace(/\D/g, '');
-                const normalizedName = contact.name.toLowerCase().trim();
-                const key = `${normalizedName}-${normalizedPhone}`;
-                
+                const key = `${contact.name.toLowerCase()}-${contact.phone.replace(/\D/g, '')}`;
                 if (!seen.has(key)) {
                     seen.add(key);
                     unique.push(contact);
@@ -593,14 +583,12 @@
             });
             
             extractedContacts = unique;
-        }
 
-        function displayContacts() {
             const preview = document.getElementById('contactsPreview');
             const tableBody = document.getElementById('contactsTableBody');
             const countDiv = document.getElementById('contactsCount');
 
-            countDiv.innerHTML = `<p><strong>Toplam ${extractedContacts.length} benzersiz kişi bulundu</strong></p>`;
+            countDiv.innerHTML = `<p><strong>Toplam ${extractedContacts.length} kişi bulundu</strong></p>`;
 
             tableBody.innerHTML = extractedContacts.map(contact => `
                 <tr>
@@ -621,15 +609,8 @@
         function exportContacts() {
             if (extractedContacts.length === 0 || !selectedOS) return;
 
-            let content, filename, mimeType;
-
-            if (selectedOS === 'android' || selectedOS === 'ios') {
-                content = generateVCF();
-                filename = 'contacts.vcf';
-                mimeType = 'text/vcard';
-            }
-
-            downloadFile(content, filename, mimeType);
+            const vcf = generateVCF();
+            downloadFile(vcf, 'contacts.vcf', 'text/vcard');
             
             const info = document.getElementById('exportInfo');
             info.className = 'status-message status-success';
@@ -681,7 +662,6 @@
             }
         }
 
-        // PDF.js worker setup
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
 </body>
