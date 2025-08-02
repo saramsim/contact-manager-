@@ -447,8 +447,10 @@
 
         function extractContactFromRow(row, source) {
             // Satırdaki tüm hücreleri kontrol et
-            let name = '';
-            let phone = '';
+            let names = [];
+            let phones = [];
+
+            console.log('Satır içeriği:', row); // Debug için
 
             for (let i = 0; i < row.length; i++) {
                 const cell = row[i];
@@ -457,25 +459,49 @@
                 const cellStr = cell.toString().trim();
                 if (!cellStr) continue;
 
+                console.log(`Hücre ${i}:`, cellStr); // Debug için
+
                 // Telefon numarası kontrolü
-                if (isPhoneNumber(cellStr)) {
-                    phone = cleanPhoneNumber(cellStr);
+                const cleanedDigits = cellStr.replace(/\D/g, '');
+                if (cleanedDigits.length >= 10) {
+                    phones.push(cleanedDigits);
+                    console.log('Telefon bulundu:', cleanedDigits);
                 }
-                // İsim kontrolü (telefon değilse)
-                else if (isPersonName(cellStr)) {
-                    name = formatPersonName(cellStr);
+                // İsim kontrolü - ÇOK GENİŞ KURAL
+                else {
+                    // Herhangi bir harf içeren ve çok uzun olmayan her şeyi isim say
+                    if (/[A-ZÇĞİÖŞÜa-zçğıöşü]/.test(cellStr) && cellStr.length >= 2 && cellStr.length <= 100) {
+                        // Sadece sayı değilse
+                        if (!/^\d+$/.test(cellStr)) {
+                            names.push(cellStr.trim());
+                            console.log('Potansiyel isim bulundu:', cellStr);
+                        }
+                    }
                 }
             }
 
-            // Hem isim hem telefon varsa kişi oluştur
-            if (name && phone) {
-                return {
-                    name: name,
-                    phone: formatPhoneNumber(phone),
+            // En iyi ismi seç
+            let bestName = '';
+            if (names.length > 0) {
+                // En uzun ismi seç (genellikle tam isimdir)
+                bestName = names.reduce((longest, current) => 
+                    current.length > longest.length ? current : longest
+                );
+                console.log('Seçilen isim:', bestName);
+            }
+
+            // Kişi oluştur
+            if (phones.length > 0) {
+                const contact = {
+                    name: bestName || `Bilinmeyen ${phones[0].substr(-4)}`,
+                    phone: formatPhoneNumber(phones[0]),
                     source: source
                 };
+                console.log('Excel kişisi oluşturuldu:', contact);
+                return contact;
             }
 
+            console.log('Telefon bulunamadı');
             return null;
         }
 
@@ -483,45 +509,70 @@
             const contacts = [];
             const lines = text.split(/[\n\r]+/);
             
-            lines.forEach(line => {
+            console.log('Metin satır sayısı:', lines.length);
+
+            lines.forEach((line, index) => {
                 const cleanLine = line.trim();
-                if (!cleanLine) return;
+                if (!cleanLine || cleanLine.length < 3) return;
 
-                // Satırda telefon var mı?
-                const words = cleanLine.split(/\s+/);
-                let name = '';
-                let phone = '';
+                console.log(`Satır ${index}:`, cleanLine);
 
-                words.forEach(word => {
-                    if (isPhoneNumber(word)) {
-                        phone = cleanPhoneNumber(word);
-                    }
-                });
+                // Telefon arama - çok basit
+                const phoneMatch = cleanLine.match(/\d{10,}/);
+                if (phoneMatch) {
+                    const phone = phoneMatch[0];
+                    console.log('Telefon bulundu:', phone);
 
-                // Telefon varsa isim ara
-                if (phone) {
-                    const lineWithoutPhone = cleanLine.replace(/\+?[\d\s\(\)\-\.]{10,}/g, '').trim();
-                    const nameWords = lineWithoutPhone.split(/\s+/).filter(word => 
+                    // İsim arama - ÇOK AĞRESIF
+                    let name = '';
+                    
+                    // Telefonu çıkar
+                    let lineForName = cleanLine.replace(phone, '').trim();
+                    
+                    // Noktalama işaretlerini temizle
+                    lineForName = lineForName.replace(/[.,;:!?()[\]{}'"]/g, ' ');
+                    
+                    // Kelimeler halinde ayır
+                    const words = lineForName.split(/\s+/).filter(word => 
                         word.length >= 2 && 
-                        /^[A-ZÇĞİÖŞÜa-zçğıöşü]+$/.test(word)
+                        /[A-ZÇĞİÖŞÜa-zçğıöşü]/.test(word) &&
+                        !/^\d+$/.test(word)
                     );
-
-                    if (nameWords.length >= 2) {
-                        name = formatPersonName(nameWords.slice(0, 2).join(' '));
-                    } else if (nameWords.length === 1) {
-                        name = formatPersonName(nameWords[0]);
+                    
+                    console.log('Bulunan kelimeler:', words);
+                    
+                    if (words.length >= 2) {
+                        // İlk iki kelimeyi birleştir
+                        name = words.slice(0, 2).join(' ');
+                    } else if (words.length === 1) {
+                        // Tek kelime varsa onu kullan
+                        name = words[0];
                     } else {
-                        name = `Kişi ${phone.substr(-4)}`;
+                        // Hiç kelime yoksa satırın kendisini dene
+                        const cleanedLine = lineForName.replace(/[^A-ZÇĞİÖŞÜa-zçğıöşü\s]/g, '').trim();
+                        if (cleanedLine.length >= 2) {
+                            name = cleanedLine;
+                        }
                     }
+                    
+                    // Hala isim yoksa varsayılan
+                    if (!name) {
+                        name = `Bilinmeyen ${phone.substr(-4)}`;
+                    }
+                    
+                    console.log('Bulunan isim:', name);
 
-                    contacts.push({
-                        name: name,
+                    const contact = {
+                        name: formatPersonName(name),
                         phone: formatPhoneNumber(phone),
                         source: source
-                    });
+                    };
+                    console.log('Metin kişisi oluşturuldu:', contact);
+                    contacts.push(contact);
                 }
             });
 
+            console.log('Toplam bulunan kişi:', contacts.length);
             return contacts;
         }
 
