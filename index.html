@@ -490,57 +490,214 @@
 
         function extractContactsFromRow(row) {
             const contacts = [];
-            const rowText = row.join(' ');
-            return extractContactsFromText(rowText);
+            
+            // Satırdaki telefon numaralarını bul
+            const phones = [];
+            const names = [];
+            
+            row.forEach((cell, index) => {
+                if (!cell) return;
+                
+                const cellStr = cell.toString().trim();
+                if (!cellStr) return;
+                
+                // Telefon numarası kontrolü
+                const phonePatterns = [
+                    /(\+90\s?)?(\(?0?\d{3}\)?\s?-?\s?\d{3}\s?-?\s?\d{2}\s?-?\s?\d{2})/g,
+                    /(\+90\s?)?(\(?0?\d{3}\)?\s?-?\s?\d{3}\s?-?\s?\d{4})/g,
+                    /(\+90\s?)?\d{10,11}/g,
+                    /05\d{2}\s?\d{3}\s?\d{2}\s?\d{2}/g,
+                    /\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/g
+                ];
+                
+                let isPhone = false;
+                phonePatterns.forEach(pattern => {
+                    const matches = cellStr.match(pattern);
+                    if (matches) {
+                        matches.forEach(match => {
+                            const cleanPhone = match.replace(/\D/g, '');
+                            if (cleanPhone.length >= 10) {
+                                phones.push({
+                                    value: cleanPhone,
+                                    index: index
+                                });
+                                isPhone = true;
+                            }
+                        });
+                    }
+                });
+                
+                // İsim kontrolü (telefon numarası değilse)
+                if (!isPhone) {
+                    // İsim pattern kontrolleri
+                    const namePatterns = [
+                        /^[A-ZÇĞİÖŞÜ][a-zçğıöşü]+\s+[A-ZÇĞİÖŞÜ][a-zçğıöşü]+/,
+                        /^[A-ZÇĞİÖŞÜ][a-zçğıöşü]+\s+[A-ZÇĞİÖŞÜ]{2,}/,
+                        /^[A-ZÇĞİÖŞÜ]{2,}\s+[A-ZÇĞİÖŞÜ][a-zçğıöşü]+/,
+                        /^[A-ZÇĞİÖŞÜ]{2,}\s+[A-ZÇĞİÖŞÜ]{2,}/
+                    ];
+                    
+                    let isValidName = false;
+                    namePatterns.forEach(pattern => {
+                        if (pattern.test(cellStr)) {
+                            isValidName = true;
+                        }
+                    });
+                    
+                    // Basit isim kontrolü
+                    if (!isValidName) {
+                        const words = cellStr.split(/\s+/).filter(word => 
+                            word.length >= 2 && 
+                            /^[A-ZÇĞİÖŞÜa-zçğıöşü]+$/.test(word) &&
+                            !['VE', 'İLE', 'DAN', 'DEN', 'TEL', 'TELEFON', 'CEVAP', 'ADRES'].includes(word.toUpperCase())
+                        );
+                        
+                        if (words.length >= 2 || (words.length === 1 && words[0].length > 3)) {
+                            isValidName = true;
+                        }
+                    }
+                    
+                    if (isValidName && cellStr.length >= 3 && cellStr.length <= 50) {
+                        names.push({
+                            value: formatPersonName(cellStr),
+                            index: index
+                        });
+                    }
+                }
+            });
+            
+            // İsim ve telefon eşleştirmesi
+            if (phones.length > 0) {
+                phones.forEach(phone => {
+                    let bestName = null;
+                    
+                    if (names.length > 0) {
+                        // En yakın ismi bul (aynı satırda, yakın sütunlarda)
+                        let closestDistance = Infinity;
+                        names.forEach(name => {
+                            const distance = Math.abs(name.index - phone.index);
+                            if (distance < closestDistance) {
+                                closestDistance = distance;
+                                bestName = name.value;
+                            }
+                        });
+                    }
+                    
+                    // Eğer isim bulunamadıysa satırın tamamını kontrol et
+                    if (!bestName) {
+                        const rowText = row.filter(cell => cell && cell.toString().trim()).join(' ');
+                        const extractedContacts = extractContactsFromText(rowText);
+                        if (extractedContacts.length > 0) {
+                            bestName = extractedContacts[0].name;
+                        }
+                    }
+                    
+                    contacts.push({
+                        name: bestName || `Bilinmeyen ${phone.value.substr(-4)}`,
+                        phone: formatPhoneNumber(phone.value)
+                    });
+                });
+            }
+            
+            return contacts;
         }
 
         function extractContactsFromText(text) {
             const contacts = [];
             
-            // Telefon numarası regex patterns
+            // Gelişmiş telefon numarası regex patterns
             const phonePatterns = [
                 /(\+90\s?)?(\(?0?\d{3}\)?\s?-?\s?\d{3}\s?-?\s?\d{2}\s?-?\s?\d{2})/g,
                 /(\+90\s?)?(\(?0?\d{3}\)?\s?-?\s?\d{3}\s?-?\s?\d{4})/g,
                 /(\+90\s?)?\d{10,11}/g,
                 /\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/g,
-                /\d{3}[-.\s]?\d{3}[-.\s]?\d{2}[-.\s]?\d{2}/g
+                /\d{3}[-.\s]?\d{3}[-.\s]?\d{2}[-.\s]?\d{2}/g,
+                /05\d{2}\s?\d{3}\s?\d{2}\s?\d{2}/g
             ];
 
-            // İsim pattern (Türkçe karakterler dahil)
-            const namePattern = /[A-ZÇĞıÖŞÜa-zçğıöşü]+\s+[A-ZÇĞıÖŞÜa-zçğıöşü]+(?:\s+[A-ZÇĞıÖŞÜa-zçğıöşü]+)*/g;
+            // Gelişmiş isim pattern - hem büyük harf hem küçük harf başlangıç
+            const namePatterns = [
+                // Tam İsim Soyisim (ilk harfler büyük)
+                /\b[A-ZÇĞİÖŞÜ][a-zçğıöşü]+\s+[A-ZÇĞİÖŞÜ][a-zçğıöşü]+(?:\s+[A-ZÇĞİÖŞÜ][a-zçğıöşü]+)?\b/g,
+                // İsim SOYISIM formatı
+                /\b[A-ZÇĞİÖŞÜ][a-zçğıöşü]+\s+[A-ZÇĞİÖŞÜ]{2,}\b/g,
+                // İSİM Soyisim formatı
+                /\b[A-ZÇĞİÖŞÜ]{2,}\s+[A-ZÇĞİÖŞÜ][a-zçğıöşü]+\b/g,
+                // İSİM SOYISIM formatı
+                /\b[A-ZÇĞİÖŞÜ]{2,}\s+[A-ZÇĞİÖŞÜ]{2,}\b/g
+            ];
 
-            const lines = text.split('\n');
+            const lines = text.split(/[\n\r]+/);
             
             lines.forEach(line => {
                 const cleanLine = line.trim();
-                if (!cleanLine) return;
+                if (!cleanLine || cleanLine.length < 5) return;
 
-                // Her satırda telefon numarası ara
+                // Telefon numaralarını bul
+                const foundPhones = [];
                 phonePatterns.forEach(pattern => {
-                    const phoneMatches = cleanLine.match(pattern);
-                    if (phoneMatches) {
-                        phoneMatches.forEach(phone => {
-                            const cleanPhone = phone.replace(/\D/g, '');
-                            if (cleanPhone.length >= 10) {
-                                // Aynı satırda isim ara
-                                const nameMatches = cleanLine.match(namePattern);
-                                if (nameMatches) {
-                                    nameMatches.forEach(name => {
-                                        if (name.length > 3 && !name.match(/^\d/)) {
-                                            contacts.push({
-                                                name: name.trim(),
-                                                phone: formatPhoneNumber(cleanPhone)
-                                            });
-                                        }
-                                    });
-                                } else {
-                                    // İsim bulunamazsa telefon numarasını genel isim olarak kullan
-                                    contacts.push({
-                                        name: `Kişi ${cleanPhone.substr(-4)}`,
-                                        phone: formatPhoneNumber(cleanPhone)
-                                    });
-                                }
-                            }
+                    const matches = [...cleanLine.matchAll(pattern)];
+                    matches.forEach(match => {
+                        const phone = match[0];
+                        const cleanPhone = phone.replace(/\D/g, '');
+                        if (cleanPhone.length >= 10) {
+                            foundPhones.push({
+                                original: phone,
+                                clean: cleanPhone,
+                                position: match.index
+                            });
+                        }
+                    });
+                });
+
+                // Her telefon numarası için isim ara
+                foundPhones.forEach(phoneInfo => {
+                    let foundName = null;
+                    
+                    // Telefon numarasını satırdan çıkar ve isim ara
+                    const lineWithoutPhone = cleanLine.replace(phoneInfo.original, ' ').replace(/\s+/g, ' ').trim();
+                    
+                    // Farklı isim formatlarını dene
+                    for (const namePattern of namePatterns) {
+                        const nameMatches = [...lineWithoutPhone.matchAll(namePattern)];
+                        if (nameMatches.length > 0) {
+                            // En uzun ismi seç (genellikle daha tam isimdir)
+                            const longestName = nameMatches.reduce((longest, current) => 
+                                current[0].length > longest[0].length ? current : longest
+                            );
+                            foundName = longestName[0].trim();
+                            break;
+                        }
+                    }
+
+                    // Eğer hala isim bulunamadıysa basit kelime analizi yap
+                    if (!foundName) {
+                        const words = lineWithoutPhone.split(/\s+/).filter(word => 
+                            word.length >= 2 && 
+                            /^[A-ZÇĞİÖŞÜa-zçğıöşü]+$/.test(word) &&
+                            !word.match(/^\d+$/) &&
+                            !['VE', 'İLE', 'DAN', 'DEN', 'TEL', 'TELEFON', 'NO', 'NUMARA'].includes(word.toUpperCase())
+                        );
+                        
+                        if (words.length >= 2) {
+                            foundName = words.slice(0, 2).join(' ');
+                        } else if (words.length === 1 && words[0].length > 2) {
+                            foundName = words[0];
+                        }
+                    }
+
+                    // İsim formatını düzelt
+                    if (foundName) {
+                        foundName = formatPersonName(foundName);
+                        contacts.push({
+                            name: foundName,
+                            phone: formatPhoneNumber(phoneInfo.clean)
+                        });
+                    } else {
+                        // Son çare: telefon numarasından isim oluştur
+                        contacts.push({
+                            name: `Bilinmeyen ${phoneInfo.clean.substr(-4)}`,
+                            phone: formatPhoneNumber(phoneInfo.clean)
                         });
                     }
                 });
@@ -551,7 +708,7 @@
             const seen = new Set();
             
             contacts.forEach(contact => {
-                const key = `${contact.name}-${contact.phone}`;
+                const key = `${contact.name.toLowerCase()}-${contact.phone}`;
                 if (!seen.has(key)) {
                     seen.add(key);
                     uniqueContacts.push(contact);
@@ -559,6 +716,18 @@
             });
 
             return uniqueContacts;
+        }
+
+        function formatPersonName(name) {
+            return name.split(' ')
+                .map(word => {
+                    if (word.length === 0) return '';
+                    // İlk harf büyük, diğerleri küçük
+                    return word.charAt(0).toLocaleUpperCase('tr-TR') + 
+                           word.slice(1).toLocaleLowerCase('tr-TR');
+                })
+                .filter(word => word.length > 0)
+                .join(' ');
         }
 
         function formatPhoneNumber(phone) {
