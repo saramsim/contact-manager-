@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kişi Rehberi Yönetim Sistemi</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 40px;
+        }
+
+        .upload-section, .export-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            border: 2px dashed #e9ecef;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover, .export-section:hover {
+            border-color: #3498db;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 1.8em;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: center;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border: none;
+            font-size: 1.1em;
+        }
+
+        .file-input-label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .file-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #27ae60;
+            display: none;
+        }
+
+        .os-selection {
+            margin: 20px 0;
+        }
+
+        .os-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .os-btn {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            background: white;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .os-btn.active {
+            border-color: #3498db;
+            background: #3498db;
+            color: white;
+        }
+
+        .os-btn:hover {
+            border-color: #3498db;
+            transform: translateY(-2px);
+        }
+
+        .export-btn {
+            width: 100%;
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #27ae60, #219a52);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+        }
+
+        .export-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+        }
+
+        .export-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .contacts-preview {
+            grid-column: 1 / -1;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 20px;
+        }
+
+        .contacts-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .contacts-table th,
+        .contacts-table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .contacts-table th {
+            background: #3498db;
+            color: white;
+            font-weight: 600;
+        }
+
+        .contacts-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .status-message {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-weight: 500;
+            display: none;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .os-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 Kişi Rehberi Yönetim Sistemi</h1>
+            <p>Excel, Word ve PDF dosyalarından kişileri çıkarıp telefonunuza aktarın</p>
+        </div>
+
+        <div class="main-content">
+            <div class="upload-section">
+                <h2 class="section-title">📁 Dosya Yükleme</h2>
+                
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls,.docx,.pdf" multiple>
+                    <label for="fileInput" class="file-input-label">
+                        📎 Dosya Seçin (Excel, Word, PDF)
+                    </label>
+                </div>
+                
+                <div id="fileInfo" class="file-info">
+                    <strong>Seçilen dosyalar:</strong>
+                    <div id="fileList"></div>
+                </div>
+
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Dosyalar işleniyor...</p>
+                </div>
+
+                <div id="statusMessage" class="status-message"></div>
+            </div>
+
+            <div class="export-section">
+                <h2 class="section-title">📲 Dışa Aktarma</h2>
+                
+                <div class="os-selection">
+                    <label><strong>İşletim Sistemi Seçin:</strong></label>
+                    <div class="os-buttons">
+                        <div class="os-btn" data-os="android">
+                            🤖 Android
+                        </div>
+                        <div class="os-btn" data-os="ios">
+                            🍎 iOS
+                        </div>
+                    </div>
+                </div>
+
+                <button id="exportBtn" class="export-btn" disabled>
+                    💾 Kişileri Dışa Aktar
+                </button>
+
+                <div id="exportInfo" class="status-message"></div>
+            </div>
+        </div>
+
+        <div id="contactsPreview" class="contacts-preview" style="display: none;">
+            <h2 class="section-title">👥 Bulunan Kişiler</h2>
+            <div id="contactsCount"></div>
+            <table class="contacts-table">
+                <thead>
+                    <tr>
+                        <th>İsim</th>
+                        <th>Telefon</th>
+                        <th>Kaynak</th>
+                    </tr>
+                </thead>
+                <tbody id="contactsTableBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let extractedContacts = [];
+        let selectedOS = '';
+
+        // Dosya yükleme
+        document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+        
+        // OS seçimi
+        document.querySelectorAll('.os-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.os-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                selectedOS = this.dataset.os;
+                updateExportButton();
+            });
+        });
+
+        // Dışa aktarma
+        document.getElementById('exportBtn').addEventListener('click', exportContacts);
+
+        async function handleFileUpload(event) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0) return;
+
+            showLoading(true);
+            showStatus('', '');
+            extractedContacts = [];
+
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = files.map(file => `<div>• ${file.name}</div>`).join('');
+            document.getElementById('fileInfo').style.display = 'block';
+
+            try {
+                for (const file of files) {
+                    const contacts = await processFile(file);
+                    extractedContacts.push(...contacts);
+                }
+
+                if (extractedContacts.length > 0) {
+                    displayContacts();
+                    showStatus('Başarılı!', `${extractedContacts.length} kişi bulundu.`, 'success');
+                } else {
+                    showStatus('Uyarı', 'Dosyalarda hiç kişi bulunamadı.', 'error');
+                }
+            } catch (error) {
+                showStatus('Hata', 'Dosya işlenirken hata oluştu: ' + error.message, 'error');
+            }
+
+            showLoading(false);
+            updateExportButton();
+        }
+
+        async function processFile(file) {
+            const contacts = [];
+            const fileName = file.name.toLowerCase();
+
+            try {
+                if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                    const excelContacts = await processExcelFile(file);
+                    contacts.push(...excelContacts);
+                } else if (fileName.endsWith('.docx')) {
+                    const wordContacts = await processWordFile(file);
+                    contacts.push(...wordContacts);
+                } else if (fileName.endsWith('.pdf')) {
+                    const pdfContacts = await processPDFFile(file);
+                    contacts.push(...pdfContacts);
+                }
+            } catch (error) {
+                console.error(`${file.name} işlenirken hata:`, error);
+            }
+
+            return contacts.map(contact => ({
+                ...contact,
+                source: file.name
+            }));
+        }
+
+        async function processExcelFile(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const contacts = [];
+
+                        workbook.SheetNames.forEach(sheetName => {
+                            const worksheet = workbook.Sheets[sheetName];
+                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                            
+                            jsonData.forEach(row => {
+                                const extractedContacts = extractContactsFromRow(row);
+                                contacts.push(...extractedContacts);
+                            });
+                        });
+
+                        resolve(contacts);
+                    } catch (error) {
+                        console.error('Excel okuma hatası:', error);
+                        resolve([]);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        async function processWordFile(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    mammoth.extractRawText({ arrayBuffer: e.target.result })
+                        .then(result => {
+                            const contacts = extractContactsFromText(result.value);
+                            resolve(contacts);
+                        })
+                        .catch(error => {
+                            console.error('Word okuma hatası:', error);
+                            resolve([]);
+                        });
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        async function processPDFFile(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const typedarray = new Uint8Array(e.target.result);
+                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                        let fullText = '';
+
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            const pageText = textContent.items.map(item => item.str).join(' ');
+                            fullText += pageText + ' ';
+                        }
+
+                        const contacts = extractContactsFromText(fullText);
+                        resolve(contacts);
+                    } catch (error) {
+                        console.error('PDF okuma hatası:', error);
+                        resolve([]);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function extractContactsFromRow(row) {
+            const contacts = [];
+            const rowText = row.join(' ');
+            return extractContactsFromText(rowText);
+        }
+
+        function extractContactsFromText(text) {
+            const contacts = [];
+            
+            // Telefon numarası regex patterns
+            const phonePatterns = [
+                /(\+90\s?)?(\(?0?\d{3}\)?\s?-?\s?\d{3}\s?-?\s?\d{2}\s?-?\s?\d{2})/g,
+                /(\+90\s?)?(\(?0?\d{3}\)?\s?-?\s?\d{3}\s?-?\s?\d{4})/g,
+                /(\+90\s?)?\d{10,11}/g,
+                /\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/g,
+                /\d{3}[-.\s]?\d{3}[-.\s]?\d{2}[-.\s]?\d{2}/g
+            ];
+
+            // İsim pattern (Türkçe karakterler dahil)
+            const namePattern = /[A-ZÇĞıÖŞÜa-zçğıöşü]+\s+[A-ZÇĞıÖŞÜa-zçğıöşü]+(?:\s+[A-ZÇĞıÖŞÜa-zçğıöşü]+)*/g;
+
+            const lines = text.split('\n');
+            
+            lines.forEach(line => {
+                const cleanLine = line.trim();
+                if (!cleanLine) return;
+
+                // Her satırda telefon numarası ara
+                phonePatterns.forEach(pattern => {
+                    const phoneMatches = cleanLine.match(pattern);
+                    if (phoneMatches) {
+                        phoneMatches.forEach(phone => {
+                            const cleanPhone = phone.replace(/\D/g, '');
+                            if (cleanPhone.length >= 10) {
+                                // Aynı satırda isim ara
+                                const nameMatches = cleanLine.match(namePattern);
+                                if (nameMatches) {
+                                    nameMatches.forEach(name => {
+                                        if (name.length > 3 && !name.match(/^\d/)) {
+                                            contacts.push({
+                                                name: name.trim(),
+                                                phone: formatPhoneNumber(cleanPhone)
+                                            });
+                                        }
+                                    });
+                                } else {
+                                    // İsim bulunamazsa telefon numarasını genel isim olarak kullan
+                                    contacts.push({
+                                        name: `Kişi ${cleanPhone.substr(-4)}`,
+                                        phone: formatPhoneNumber(cleanPhone)
+                                    });
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+
+            // Duplicate removal
+            const uniqueContacts = [];
+            const seen = new Set();
+            
+            contacts.forEach(contact => {
+                const key = `${contact.name}-${contact.phone}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    uniqueContacts.push(contact);
+                }
+            });
+
+            return uniqueContacts;
+        }
+
+        function formatPhoneNumber(phone) {
+            // Türk telefon numarası formatı
+            let cleaned = phone.replace(/\D/g, '');
+            
+            if (cleaned.startsWith('90')) {
+                cleaned = cleaned.substring(2);
+            }
+            
+            if (cleaned.startsWith('0')) {
+                cleaned = cleaned.substring(1);
+            }
+            
+            if (cleaned.length === 10) {
+                return `+90 ${cleaned.substring(0, 3)} ${cleaned.substring(3, 6)} ${cleaned.substring(6, 8)} ${cleaned.substring(8)}`;
+            }
+            
+            return phone;
+        }
+
+        function displayContacts() {
+            const preview = document.getElementById('contactsPreview');
+            const tableBody = document.getElementById('contactsTableBody');
+            const countDiv = document.getElementById('contactsCount');
+
+            countDiv.innerHTML = `<p><strong>Toplam ${extractedContacts.length} kişi bulundu</strong></p>`;
+
+            tableBody.innerHTML = extractedContacts.map(contact => `
+                <tr>
+                    <td>${contact.name}</td>
+                    <td>${contact.phone}</td>
+                    <td>${contact.source}</td>
+                </tr>
+            `).join('');
+
+            preview.style.display = 'block';
+        }
+
+        function updateExportButton() {
+            const btn = document.getElementById('exportBtn');
+            btn.disabled = extractedContacts.length === 0 || !selectedOS;
+        }
+
+        function exportContacts() {
+            if (extractedContacts.length === 0 || !selectedOS) return;
+
+            let content, filename, mimeType;
+
+            if (selectedOS === 'android') {
+                content = generateVCF();
+                filename = 'contacts.vcf';
+                mimeType = 'text/vcard';
+            } else if (selectedOS === 'ios') {
+                content = generateVCF();
+                filename = 'contacts.vcf';
+                mimeType = 'text/vcard';
+            }
+
+            downloadFile(content, filename, mimeType);
+            
+            const info = document.getElementById('exportInfo');
+            info.className = 'status-message status-success';
+            info.style.display = 'block';
+            info.innerHTML = `
+                <strong>Başarılı!</strong><br>
+                ${extractedContacts.length} kişi ${selectedOS === 'android' ? 'Android' : 'iOS'} formatında indirildi.<br>
+                <small>Dosyayı telefonunuza gönderin ve açarak kişilerinizi içe aktarın.</small>
+            `;
+        }
+
+        function generateVCF() {
+            let vcf = '';
+            extractedContacts.forEach(contact => {
+                vcf += 'BEGIN:VCARD\n';
+                vcf += 'VERSION:3.0\n';
+                vcf += `FN:${contact.name}\n`;
+                vcf += `N:${contact.name.split(' ').reverse().join(';')}\n`;
+                vcf += `TEL;TYPE=CELL:${contact.phone}\n`;
+                vcf += 'END:VCARD\n';
+            });
+            return vcf;
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        function showStatus(title, message, type = '') {
+            const statusDiv = document.getElementById('statusMessage');
+            if (title && message) {
+                statusDiv.innerHTML = `<strong>${title}</strong> ${message}`;
+                statusDiv.className = `status-message ${type ? 'status-' + type : ''}`;
+                statusDiv.style.display = 'block';
+            } else {
+                statusDiv.style.display = 'none';
+            }
+        }
+
+        // PDF.js worker setup
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+</body>
+</html>
