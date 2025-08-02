@@ -372,12 +372,18 @@
             try {
                 for (const file of files) {
                     const contacts = await processFile(file);
-                    extractedContacts.push(...contacts);
+                    contacts.forEach(contact => {
+                        contact.source = file.name;
+                        extractedContacts.push(contact);
+                    });
                 }
+
+                // Tek seferde duplicate removal
+                removeDuplicates();
 
                 if (extractedContacts.length > 0) {
                     displayContacts();
-                    showStatus('Başarılı!', `${extractedContacts.length} kişi bulundu.`, 'success');
+                    showStatus('Başarılı!', `${extractedContacts.length} benzersiz kişi bulundu.`, 'success');
                 } else {
                     showStatus('Uyarı', 'Dosyalarda hiç kişi bulunamadı.', 'error');
                 }
@@ -408,10 +414,7 @@
                 console.error(`${file.name} işlenirken hata:`, error);
             }
 
-            return contacts.map(contact => ({
-                ...contact,
-                source: file.name
-            }));
+            return contacts;
         }
 
         async function processExcelFile(file) {
@@ -421,18 +424,23 @@
                     try {
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, { type: 'array' });
-                        const contacts = [];
+                        const allText = [];
 
                         workbook.SheetNames.forEach(sheetName => {
                             const worksheet = workbook.Sheets[sheetName];
                             const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
                             
                             jsonData.forEach(row => {
-                                const extractedContacts = extractContactsFromRow(row);
-                                contacts.push(...extractedContacts);
+                                if (row && row.length > 0) {
+                                    const rowText = row.filter(cell => cell).join(' ');
+                                    if (rowText.trim()) {
+                                        allText.push(rowText);
+                                    }
+                                }
                             });
                         });
 
+                        const contacts = extractContactsFromText(allText.join('\n'));
                         resolve(contacts);
                     } catch (error) {
                         console.error('Excel okuma hatası:', error);
@@ -474,7 +482,7 @@
                             const page = await pdf.getPage(i);
                             const textContent = await page.getTextContent();
                             const pageText = textContent.items.map(item => item.str).join(' ');
-                            fullText += pageText + ' ';
+                            fullText += pageText + '\n';
                         }
 
                         const contacts = extractContactsFromText(fullText);
@@ -488,58 +496,47 @@
             });
         }
 
-        function extractContactsFromRow(row) {
-            // Basit satır birleştirme ve metin işleme
-            const rowText = row.filter(cell => cell && cell.toString().trim()).join(' ');
-            return extractContactsFromText(rowText);
-        }
-
         function extractContactsFromText(text) {
             const contacts = [];
-            
-            // Basit ve etkili telefon numarası pattern
-            const phoneRegex = /(\+90\s?)?(\(?0?\d{3}\)?\s?-?\s?\d{3}\s?-?\s?\d{2}\s?-?\s?\d{2}|\(?0?\d{3}\)?\s?-?\s?\d{3}\s?-?\s?\d{4}|05\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\d{10,11})/g;
-            
-            // Basit isim pattern
-            const nameRegex = /\b[A-ZÇĞİÖŞÜ][a-zçğıöşü]+\s+[A-ZÇĞİÖŞÜa-zçğıöşü]+\b/g;
-
-            const lines = text.split(/[\n\r\t]+/);
+            const lines = text.split(/[\n\r]+/);
             
             lines.forEach(line => {
                 const cleanLine = line.trim();
                 if (!cleanLine || cleanLine.length < 5) return;
 
-                // Satırda telefon numarası var mı?
-                const phoneMatch = cleanLine.match(phoneRegex);
+                // Basit telefon numarası arama - sadece bir kez
+                const phoneMatch = cleanLine.match(/(\+90\s?)?(\(?0?\d{3}\)?\s?[-.]?\s?\d{3}\s?[-.]?\s?\d{2}\s?[-.]?\s?\d{2}|\(?0?\d{3}\)?\s?[-.]?\s?\d{3}\s?[-.]?\s?\d{4}|05\d{2}\s?\d{3}\s?\d{2}\s?\d{2})/);
+                
                 if (phoneMatch) {
                     const phone = phoneMatch[0];
                     const cleanPhone = phone.replace(/\D/g, '');
                     
                     if (cleanPhone.length >= 10) {
-                        // Aynı satırda isim ara
-                        const lineWithoutPhone = cleanLine.replace(phone, '').trim();
-                        const nameMatch = lineWithoutPhone.match(nameRegex);
+                        // Telefon numarasını satırdan çıkar ve isim ara
+                        const lineWithoutPhone = cleanLine.replace(phone, ' ').trim();
+                        
+                        // Basit isim arama
+                        const nameMatch = lineWithoutPhone.match(/\b[A-ZÇĞİÖŞÜa-zçğıöşü]{2,}\s+[A-ZÇĞİÖŞÜa-zçğıöşü]{2,}\b/);
                         
                         let name = '';
                         if (nameMatch) {
                             name = formatPersonName(nameMatch[0]);
                         } else {
-                            // Basit kelime analizi
+                            // Kelime bazlı isim arama
                             const words = lineWithoutPhone.split(/\s+/).filter(word => 
                                 word.length >= 2 && 
                                 /^[A-ZÇĞİÖŞÜa-zçğıöşü]+$/.test(word) &&
-                                !['VE', 'İLE', 'TEL', 'TELEFON'].includes(word.toUpperCase())
+                                !['VE', 'İLE', 'TEL', 'TELEFON', 'NO'].includes(word.toUpperCase())
                             );
                             
                             if (words.length >= 2) {
                                 name = formatPersonName(words.slice(0, 2).join(' '));
-                            } else if (words.length === 1 && words[0].length > 2) {
-                                name = formatPersonName(words[0] + ' Kişi');
                             } else {
                                 name = `Bilinmeyen ${cleanPhone.substr(-4)}`;
                             }
                         }
                         
+                        // Sadece bir kez ekle
                         contacts.push({
                             name: name,
                             phone: formatPhoneNumber(cleanPhone)
@@ -555,7 +552,6 @@
             return name.split(' ')
                 .map(word => {
                     if (word.length === 0) return '';
-                    // İlk harf büyük, diğerleri küçük
                     return word.charAt(0).toLocaleUpperCase('tr-TR') + 
                            word.slice(1).toLocaleLowerCase('tr-TR');
                 })
@@ -564,7 +560,6 @@
         }
 
         function formatPhoneNumber(phone) {
-            // Türk telefon numarası formatı
             let cleaned = phone.replace(/\D/g, '');
             
             if (cleaned.startsWith('90')) {
@@ -582,26 +577,25 @@
             return phone;
         }
 
-        function displayContacts() {
-            // Güçlü duplicate removal
-            const uniqueContacts = [];
+        function removeDuplicates() {
+            const unique = [];
             const seen = new Set();
             
             extractedContacts.forEach(contact => {
-                // Hem isim hem telefon ile anahtar oluştur
                 const normalizedPhone = contact.phone.replace(/\D/g, '');
                 const normalizedName = contact.name.toLowerCase().trim();
                 const key = `${normalizedName}-${normalizedPhone}`;
                 
                 if (!seen.has(key)) {
                     seen.add(key);
-                    uniqueContacts.push(contact);
+                    unique.push(contact);
                 }
             });
             
-            // Global değişkeni güncelle
-            extractedContacts = uniqueContacts;
-            
+            extractedContacts = unique;
+        }
+
+        function displayContacts() {
             const preview = document.getElementById('contactsPreview');
             const tableBody = document.getElementById('contactsTableBody');
             const countDiv = document.getElementById('contactsCount');
@@ -629,11 +623,7 @@
 
             let content, filename, mimeType;
 
-            if (selectedOS === 'android') {
-                content = generateVCF();
-                filename = 'contacts.vcf';
-                mimeType = 'text/vcard';
-            } else if (selectedOS === 'ios') {
+            if (selectedOS === 'android' || selectedOS === 'ios') {
                 content = generateVCF();
                 filename = 'contacts.vcf';
                 mimeType = 'text/vcard';
