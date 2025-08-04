@@ -1,562 +1,186 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kişi Rehberi Yönetim Sistemi</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            font-weight: 300;
-        }
-
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            padding: 40px;
-        }
-
-        .upload-section, .export-section {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 30px;
-            border: 2px dashed #e9ecef;
-            transition: all 0.3s ease;
-        }
-
-        .upload-section:hover, .export-section:hover {
-            border-color: #3498db;
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        }
-
-        .section-title {
-            font-size: 1.8em;
-            color: #2c3e50;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .file-input-wrapper {
-            position: relative;
-            margin-bottom: 20px;
-        }
-
-        .file-input {
-            display: none;
-        }
-
-        .file-input-label {
-            display: block;
-            padding: 15px 25px;
-            background: linear-gradient(135deg, #3498db, #2980b9);
-            color: white;
-            border-radius: 10px;
-            cursor: pointer;
-            text-align: center;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: none;
-            font-size: 1.1em;
-        }
-
-        .file-input-label:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
-        }
-
-        .file-info {
-            margin-top: 15px;
-            padding: 15px;
-            background: white;
-            border-radius: 8px;
-            border-left: 4px solid #27ae60;
-            display: none;
-        }
-
-        .os-selection {
-            margin: 20px 0;
-        }
-
-        .os-buttons {
-            display: flex;
-            gap: 15px;
-            margin-top: 15px;
-        }
-
-        .os-btn {
-            flex: 1;
-            padding: 15px;
-            border: 2px solid #e9ecef;
-            background: white;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-            font-weight: 500;
-        }
-
-        .os-btn.active {
-            border-color: #3498db;
-            background: #3498db;
-            color: white;
-        }
-
-        .os-btn:hover {
-            border-color: #3498db;
-            transform: translateY(-2px);
-        }
-
-        .export-btn {
-            width: 100%;
-            padding: 15px 25px;
-            background: linear-gradient(135deg, #27ae60, #219a52);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 1.1em;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            margin-top: 20px;
-        }
-
-        .export-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
-        }
-
-        .export-btn:disabled {
-            background: #bdc3c7;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .contacts-preview {
-            grid-column: 1 / -1;
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 30px;
-            margin-top: 20px;
-        }
-
-        .contacts-table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-
-        .contacts-table th,
-        .contacts-table td {
-            padding: 15px;
-            text-align: left;
-            border-bottom: 1px solid #e9ecef;
-        }
-
-        .contacts-table th {
-            background: #3498db;
-            color: white;
-            font-weight: 600;
-        }
-
-        .contacts-table tr:hover {
-            background: #f8f9fa;
-        }
-
-        .status-message {
-            padding: 15px;
-            border-radius: 10px;
-            margin: 15px 0;
-            font-weight: 500;
-            display: none;
-        }
-
-        .status-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .status-error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 768px) {
-            .main-content {
-                grid-template-columns: 1fr;
-                gap: 20px;
-                padding: 20px;
-            }
-            
-            .header h1 {
-                font-size: 2em;
-            }
-            
-            .os-buttons {
-                flex-direction: column;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>📱 Kişi Rehberi Yönetim Sistemi</h1>
-            <p>Excel, Word ve PDF dosyalarından kişileri çıkarıp telefonunuza aktarın</p>
-        </div>
-
-        <div class="main-content">
-            <div class="upload-section">
-                <h2 class="section-title">📁 Dosya Yükleme</h2>
-                
-                <div class="file-input-wrapper">
-                    <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls,.docx,.pdf" multiple>
-                    <label for="fileInput" class="file-input-label">
-                        📎 Dosya Seçin (Excel, Word, PDF)
-                    </label>
-                </div>
-                
-                <div id="fileInfo" class="file-info">
-                    <strong>Seçilen dosyalar:</strong>
-                    <div id="fileList"></div>
-                </div>
-
-                <div class="loading" id="loading">
-                    <div class="spinner"></div>
-                    <p>Dosyalar işleniyor...</p>
-                </div>
-
-                <div id="statusMessage" class="status-message"></div>
-            </div>
-
-            <div class="export-section">
-                <h2 class="section-title">📲 Dışa Aktarma</h2>
-                
-                <div class="os-selection">
-                    <label><strong>İşletim Sistemi Seçin:</strong></label>
-                    <div class="os-buttons">
-                        <div class="os-btn" data-os="android">
-                            🤖 Android
-                        </div>
-                        <div class="os-btn" data-os="ios">
-                            🍎 iOS
-                        </div>
-                    </div>
-                </div>
-
-                <button id="exportBtn" class="export-btn" disabled>
-                    💾 Kişileri Dışa Aktar
-                </button>
-
-                <div id="exportInfo" class="status-message"></div>
-            </div>
-        </div>
-
-        <div id="contactsPreview" class="contacts-preview" style="display: none;">
-            <h2 class="section-title">👥 Bulunan Kişiler</h2>
-            <div id="contactsCount"></div>
-            <table class="contacts-table">
-                <thead>
-                    <tr>
-                        <th>İsim</th>
-                        <th>Telefon</th>
-                        <th>Kaynak</th>
-                    </tr>
-                </thead>
-                <tbody id="contactsTableBody">
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <script>
-        let extractedContacts = [];
-        let selectedOS = '';
-
-        document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+function extractContactFromRow(row, source) {
+    console.log('Satır içeriği:', row);
+    
+    let firstName = '';
+    let lastName = '';
+    let phones = [];
+    
+    // Excel sütunlarını kontrol et
+    for (let i = 0; i < row.length; i++) {
+        const cell = row[i];
+        if (!cell) continue;
         
-        document.querySelectorAll('.os-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.os-btn').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-                selectedOS = this.dataset.os;
-                updateExportButton();
-            });
-        });
+        const cellStr = cell.toString().trim();
+        if (!cellStr) continue;
 
-        document.getElementById('exportBtn').addEventListener('click', exportContacts);
+        console.log(`Hücre ${i} (${getColumnName(i)}):`, cellStr);
 
-        async function handleFileUpload(event) {
-            const files = Array.from(event.target.files);
-            if (files.length === 0) return;
-
-            showLoading(true);
-            extractedContacts = [];
-
-            const fileList = document.getElementById('fileList');
-            fileList.innerHTML = files.map(file => `<div>• ${file.name}</div>`).join('');
-            document.getElementById('fileInfo').style.display = 'block';
-
-            try {
-                for (const file of files) {
-                    const contacts = await processFile(file);
-                    extractedContacts.push(...contacts);
-                }
-
-                if (extractedContacts.length > 0) {
-                    displayContacts();
-                    showStatus('Başarılı!', `${extractedContacts.length} kişi bulundu.`, 'success');
-                } else {
-                    showStatus('Uyarı', 'Dosyalarda hiç kişi bulunamadı.', 'error');
-                }
-            } catch (error) {
-                showStatus('Hata', 'Dosya işlenirken hata oluştu: ' + error.message, 'error');
-            }
-
-            showLoading(false);
-            updateExportButton();
+        // Telefon numarası kontrolü (genellikle F sütunu - index 5)
+        const cleanedDigits = cellStr.replace(/\D/g, '');
+        if (cleanedDigits.length >= 10 && isPhoneNumber(cellStr)) {
+            phones.push(cleanedDigits);
+            console.log('Telefon bulundu:', cleanedDigits);
         }
-
-        async function processFile(file) {
-            const contacts = [];
-            const fileName = file.name.toLowerCase();
-
-            try {
-                if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-                    const data = await readFileAsArrayBuffer(file);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    
-                    workbook.SheetNames.forEach(sheetName => {
-                        const worksheet = workbook.Sheets[sheetName];
-                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                        
-                        jsonData.forEach(row => {
-                            if (row && row.length > 0) {
-                                const contact = extractContactFromRow(row, file.name);
-                                if (contact) {
-                                    contacts.push(contact);
-                                }
-                            }
-                        });
-                    });
-
-                } else if (fileName.endsWith('.docx')) {
-                    const data = await readFileAsArrayBuffer(file);
-                    const result = await mammoth.extractRawText({ arrayBuffer: data });
-                    const textContacts = extractContactsFromText(result.value, file.name);
-                    contacts.push(...textContacts);
-
-                } else if (fileName.endsWith('.pdf')) {
-                    const data = await readFileAsArrayBuffer(file);
-                    const pdf = await pdfjsLib.getDocument(data).promise;
-                    let fullText = '';
-
-                    for (let i = 1; i <= pdf.numPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        fullText += pageText + '\n';
-                    }
-
-                    const textContacts = extractContactsFromText(fullText, file.name);
-                    contacts.push(...textContacts);
-                }
-            } catch (error) {
-                console.error(`${file.name} işlenirken hata:`, error);
+        // İsim kontrolü - telefon değilse
+        else if (isValidName(cellStr)) {
+            // İlk geçerli isim hücresi (genellikle A sütunu)
+            if (!firstName && i <= 2) {
+                firstName = cellStr.trim();
+                console.log('Ad bulundu:', firstName);
             }
-
-            return contacts;
+            // İkinci geçerli isim hücresi (genellikle B sütunu) 
+            else if (!lastName && i <= 3 && firstName) {
+                lastName = cellStr.trim();
+                console.log('Soyad bulundu:', lastName);
+            }
         }
-
-        function readFileAsArrayBuffer(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = e => resolve(new Uint8Array(e.target.result));
-                reader.onerror = reject;
-                reader.readAsArrayBuffer(file);
-            });
+    }
+    
+    // İsmi birleştir
+    let fullName = '';
+    if (firstName && lastName) {
+        fullName = `${firstName} ${lastName}`;
+    } else if (firstName) {
+        // Eğer firstName birden fazla kelime içeriyorsa (BERAT AHMET gibi)
+        const words = firstName.split(/\s+/);
+        if (words.length >= 2) {
+            fullName = firstName; // Zaten tam isim
+        } else {
+            fullName = firstName; // Tek isim
         }
+    } else if (lastName) {
+        fullName = lastName;
+    }
+    
+    console.log('Birleştirilmiş isim:', fullName);
+    
+    // Kişi oluştur
+    if (phones.length > 0 && fullName) {
+        const contact = {
+            name: formatPersonName(fullName),
+            phone: formatPhoneNumber(phones[0]),
+            source: source
+        };
+        console.log('Excel kişisi oluşturuldu:', contact);
+        return contact;
+    } else if (phones.length > 0) {
+        // İsim yoksa telefon son 4 hanesi ile varsayılan isim
+        const contact = {
+            name: `Bilinmeyen ${phones[0].substr(-4)}`,
+            phone: formatPhoneNumber(phones[0]),
+            source: source
+        };
+        console.log('İsimsiz Excel kişisi oluşturuldu:', contact);
+        return contact;
+    }
 
-        function extractContactFromRow(row, source) {
-            // Satırdaki tüm hücreleri kontrol et
-            let names = [];
-            let phones = [];
+    console.log('Geçerli kişi bulunamadı - isim:', fullName, 'telefon sayısı:', phones.length);
+    return null;
+}
 
-            console.log('Satır içeriği:', row); // Debug için
+function isValidName(text) {
+    if (!text || text.length < 2 || text.length > 50) return false;
+    
+    // Sadece sayı değil
+    if (/^\d+$/.test(text)) return false;
+    
+    // En az bir harf içermeli
+    if (!/[A-ZÇĞİÖŞÜa-zçğıöşü]/.test(text)) return false;
+    
+    // Çok fazla sayı içermemeli (telefon numarası olabilir)
+    const digitCount = (text.match(/\d/g) || []).length;
+    if (digitCount > text.length / 2) return false;
+    
+    // Email adresi değil
+    if (text.includes('@')) return false;
+    
+    // URL değil
+    if (text.includes('http') || text.includes('www.')) return false;
+    
+    // Özel durumlar - Excel'de sık görülen değerler
+    const upperText = text.toUpperCase();
+    if (upperText === 'SAYISAL' || upperText === 'B' || /^\d+$/.test(text)) {
+        return false;
+    }
+    
+    return true;
+}
 
-            for (let i = 0; i < row.length; i++) {
-                const cell = row[i];
-                if (!cell) continue;
-                
-                const cellStr = cell.toString().trim();
-                if (!cellStr) continue;
-
-                console.log(`Hücre ${i}:`, cellStr); // Debug için
-
-                // Telefon numarası kontrolü
-                const cleanedDigits = cellStr.replace(/\D/g, '');
-                if (cleanedDigits.length >= 10) {
-                    phones.push(cleanedDigits);
-                    console.log('Telefon bulundu:', cleanedDigits);
-                }
-                // İsim kontrolü - ÇOK GENİŞ KURAL
-                else {
-                    // Herhangi bir harf içeren ve çok uzun olmayan her şeyi isim say
-                    if (/[A-ZÇĞİÖŞÜa-zçğıöşü]/.test(cellStr) && cellStr.length >= 2 && cellStr.length <= 100) {
-                        // Sadece sayı değilse
-                        if (!/^\d+$/.test(cellStr)) {
-                            names.push(cellStr.trim());
-                            console.log('Potansiyel isim bulundu:', cellStr);
-                        }
-                    }
-                }
-            }
-
-            // En iyi ismi seç
-            let bestName = '';
-            if (names.length > 0) {
-                // En uzun ismi seç (genellikle tam isimdir)
-                bestName = names.reduce((longest, current) => 
-                    current.length > longest.length ? current : longest
-                );
-                console.log('Seçilen isim:', bestName);
-            }
-
-            // Kişi oluştur
-            if (phones.length > 0) {
-                const contact = {
-                    name: bestName || `Bilinmeyen ${phones[0].substr(-4)}`,
-                    phone: formatPhoneNumber(phones[0]),
-                    source: source
-                };
-                console.log('Excel kişisi oluşturuldu:', contact);
-                return contact;
-            }
-
-            console.log('Telefon bulunamadı');
-            return null;
-        }
-
-        function extractContactsFromText(text, source) {
-            const contacts = [];
-            const lines = text.split(/[\n\r]+/);
+function formatPersonName(name) {
+    if (!name) return '';
+    
+    return name
+        .trim()
+        .split(/\s+/)
+        .map(word => {
+            if (word.length === 0) return '';
             
-            console.log('Metin satır sayısı:', lines.length);
+            // Türkçe karakterler için özel formatıma
+            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(' ');
+}
 
-            lines.forEach((line, index) => {
-                const cleanLine = line.trim();
-                if (!cleanLine || cleanLine.length < 3) return;
+function extractContactsFromText(text, source) {
+    const contacts = [];
+    const lines = text.split(/[\n\r]+/);
 
-                console.log(`Satır ${index}:`, cleanLine);
+    console.log('Metin satır sayısı:', lines.length);
 
-                // Telefon arama - çok basit
-                const phoneMatch = cleanLine.match(/\d{10,}/);
-                if (phoneMatch) {
-                    const phone = phoneMatch[0];
+    lines.forEach((line, index) => {
+        const cleanLine = line.trim();
+        if (!cleanLine || cleanLine.length < 3) return;
+
+        console.log(`Satır ${index}:`, cleanLine);
+
+        // Telefon arama - daha esnek pattern
+        const phoneMatches = cleanLine.match(/[\+]?[\d\s\(\)\-\.]{10,}/g);
+        
+        if (phoneMatches) {
+            phoneMatches.forEach(phoneMatch => {
+                const cleanedDigits = phoneMatch.replace(/\D/g, '');
+                if (cleanedDigits.length >= 10) {
+                    const phone = cleanedDigits;
                     console.log('Telefon bulundu:', phone);
 
-                    // İsim arama - ÇOK AĞRESIF
-                    let name = '';
-                    
-                    // Telefonu çıkar
-                    let lineForName = cleanLine.replace(phone, '').trim();
+                    // İsim arama - telefonu çıkararak
+                    let lineForName = cleanLine.replace(phoneMatch, '').trim();
                     
                     // Noktalama işaretlerini temizle
                     lineForName = lineForName.replace(/[.,;:!?()[\]{}'"]/g, ' ');
                     
-                    // Kelimeler halinde ayır
-                    const words = lineForName.split(/\s+/).filter(word => 
-                        word.length >= 2 && 
-                        /[A-ZÇĞİÖŞÜa-zçğıöşü]/.test(word) &&
-                        !/^\d+$/.test(word)
-                    );
+                    // Birden fazla boşluğu tek boşluk yap
+                    lineForName = lineForName.replace(/\s+/g, ' ').trim();
                     
-                    console.log('Bulunan kelimeler:', words);
+                    let name = '';
                     
-                    if (words.length >= 2) {
-                        // İlk iki kelimeyi birleştir
-                        name = words.slice(0, 2).join(' ');
-                    } else if (words.length === 1) {
-                        // Tek kelime varsa onu kullan
-                        name = words[0];
-                    } else {
-                        // Hiç kelime yoksa satırın kendisini dene
-                        const cleanedLine = lineForName.replace(/[^A-ZÇĞİÖŞÜa-zçğıöşü\s]/g, '').trim();
-                        if (cleanedLine.length >= 2) {
-                            name = cleanedLine;
+                    if (lineForName.length >= 2) {
+                        // Kelimeler halinde ayır ve filtrele
+                        const words = lineForName.split(/\s+/).filter(word => 
+                            word.length >= 2 && 
+                            /[A-ZÇĞİÖŞÜa-zçğıöşü]/.test(word) &&
+                            !/^\d+$/.test(word)
+                        );
+                        
+                        console.log('Bulunan kelimeler:', words);
+                        
+                        if (words.length >= 2) {
+                            // İlk iki kelimeyi birleştir (ad soyad)
+                            name = words.slice(0, 2).join(' ');
+                        } else if (words.length === 1) {
+                            // Tek kelime varsa onu kullan
+                            name = words[0];
+                        } else {
+                            // Kelime bulunamadıysa orijinal metni temizleyerek dene
+                            const cleanedLine = lineForName.replace(/[^A-ZÇĞİÖŞÜa-zçğıöşü\s]/g, '').trim();
+                            if (cleanedLine.length >= 2) {
+                                name = cleanedLine;
+                            }
                         }
                     }
                     
                     // Hala isim yoksa varsayılan
-                    if (!name) {
+                    if (!name || name.length < 2) {
                         name = `Bilinmeyen ${phone.substr(-4)}`;
                     }
                     
@@ -571,149 +195,41 @@
                     contacts.push(contact);
                 }
             });
-
-            console.log('Toplam bulunan kişi:', contacts.length);
-            return contacts;
         }
+    });
 
-        function isPhoneNumber(str) {
-            if (!str) return false;
-            const cleaned = str.toString().replace(/\D/g, '');
-            return cleaned.length >= 10 && cleaned.length <= 13;
-        }
+    console.log('Toplam bulunan kişi:', contacts.length);
+    return contacts;
+}
 
-        function isPersonName(str) {
-            if (!str || str.length < 2) return false;
-            const words = str.toString().trim().split(/\s+/);
-            if (words.length < 1) return false;
-            
-            return words.every(word => 
-                /^[A-ZÇĞİÖŞÜa-zçğıöşü]+$/.test(word) && 
-                word.length >= 2
-            );
-        }
+// Yardımcı fonksiyonlar
+function getColumnName(index) {
+    const columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+    return columns[index] || `Col${index}`;
+}
 
-        function cleanPhoneNumber(phone) {
-            return phone.toString().replace(/\D/g, '');
-        }
+function isPhoneNumber(text) {
+    const digits = text.replace(/\D/g, '');
+    return digits.length >= 10 && digits.length <= 15;
+}
 
-        function formatPersonName(name) {
-            return name.split(' ')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                .join(' ');
-        }
+function cleanPhoneNumber(phone) {
+    return phone.replace(/\D/g, '');
+}
 
-        function formatPhoneNumber(phone) {
-            let cleaned = phone.replace(/\D/g, '');
-            
-            if (cleaned.startsWith('90')) {
-                cleaned = cleaned.substring(2);
-            }
-            if (cleaned.startsWith('0')) {
-                cleaned = cleaned.substring(1);
-            }
-            
-            if (cleaned.length === 10) {
-                return `+90 ${cleaned.substring(0, 3)} ${cleaned.substring(3, 6)} ${cleaned.substring(6, 8)} ${cleaned.substring(8)}`;
-            }
-            
-            return phone;
-        }
-
-        function displayContacts() {
-            // Duplicate removal
-            const unique = [];
-            const seen = new Set();
-            
-            extractedContacts.forEach(contact => {
-                const key = `${contact.name.toLowerCase()}-${contact.phone.replace(/\D/g, '')}`;
-                if (!seen.has(key)) {
-                    seen.add(key);
-                    unique.push(contact);
-                }
-            });
-            
-            extractedContacts = unique;
-
-            const preview = document.getElementById('contactsPreview');
-            const tableBody = document.getElementById('contactsTableBody');
-            const countDiv = document.getElementById('contactsCount');
-
-            countDiv.innerHTML = `<p><strong>Toplam ${extractedContacts.length} kişi bulundu</strong></p>`;
-
-            tableBody.innerHTML = extractedContacts.map(contact => `
-                <tr>
-                    <td>${contact.name}</td>
-                    <td>${contact.phone}</td>
-                    <td>${contact.source}</td>
-                </tr>
-            `).join('');
-
-            preview.style.display = 'block';
-        }
-
-        function updateExportButton() {
-            const btn = document.getElementById('exportBtn');
-            btn.disabled = extractedContacts.length === 0 || !selectedOS;
-        }
-
-        function exportContacts() {
-            if (extractedContacts.length === 0 || !selectedOS) return;
-
-            const vcf = generateVCF();
-            downloadFile(vcf, 'contacts.vcf', 'text/vcard');
-            
-            const info = document.getElementById('exportInfo');
-            info.className = 'status-message status-success';
-            info.style.display = 'block';
-            info.innerHTML = `
-                <strong>Başarılı!</strong><br>
-                ${extractedContacts.length} kişi ${selectedOS === 'android' ? 'Android' : 'iOS'} formatında indirildi.<br>
-                <small>Dosyayı telefonunuza gönderin ve açarak kişilerinizi içe aktarın.</small>
-            `;
-        }
-
-        function generateVCF() {
-            let vcf = '';
-            extractedContacts.forEach(contact => {
-                vcf += 'BEGIN:VCARD\n';
-                vcf += 'VERSION:3.0\n';
-                vcf += `FN:${contact.name}\n`;
-                vcf += `N:${contact.name.split(' ').reverse().join(';')}\n`;
-                vcf += `TEL;TYPE=CELL:${contact.phone}\n`;
-                vcf += 'END:VCARD\n';
-            });
-            return vcf;
-        }
-
-        function downloadFile(content, filename, mimeType) {
-            const blob = new Blob([content], { type: mimeType });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-
-        function showLoading(show) {
-            document.getElementById('loading').style.display = show ? 'block' : 'none';
-        }
-
-        function showStatus(title, message, type = '') {
-            const statusDiv = document.getElementById('statusMessage');
-            if (title && message) {
-                statusDiv.innerHTML = `<strong>${title}</strong> ${message}`;
-                statusDiv.className = `status-message ${type ? 'status-' + type : ''}`;
-                statusDiv.style.display = 'block';
-            } else {
-                statusDiv.style.display = 'none';
-            }
-        }
-
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    </script>
-</body>
-</html>
+function formatPhoneNumber(phone) {
+    const cleaned = phone.replace(/\D/g, '');
+    
+    if (cleaned.length === 10) {
+        // 5XXXXXXXXX formatı
+        return `(${cleaned.substr(0, 3)}) ${cleaned.substr(3, 3)} ${cleaned.substr(6, 2)} ${cleaned.substr(8, 2)}`;
+    } else if (cleaned.length === 11 && cleaned.startsWith('0')) {
+        // 05XXXXXXXXX formatı
+        return `${cleaned.substr(0, 4)} ${cleaned.substr(4, 3)} ${cleaned.substr(7, 2)} ${cleaned.substr(9, 2)}`;
+    } else if (cleaned.length === 13 && cleaned.startsWith('90')) {
+        // 905XXXXXXXXX formatı
+        return `+${cleaned.substr(0, 2)} ${cleaned.substr(2, 3)} ${cleaned.substr(5, 3)} ${cleaned.substr(8, 2)} ${cleaned.substr(10, 2)}`;
+    }
+    
+    return cleaned;
+}
